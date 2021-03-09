@@ -1,0 +1,5 @@
+CREATE OR REPLACE EDITIONING VIEW &&SCHEMA.markets
+AS
+SELECT	id,
+		code
+FROM	&&SCHEMA.t_markets;

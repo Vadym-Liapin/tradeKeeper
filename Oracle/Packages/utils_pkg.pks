@@ -1,0 +1,21 @@
+CREATE OR REPLACE PACKAGE &&SCHEMA.utils_pkg
+IS
+
+	FUNCTION unix_seconds_to_date (
+        in_unix_seconds	IN	number
+    ) RETURN date DETERMINISTIC;
+
+	FUNCTION unix_milliseconds_to_date (
+        in_unix_milliseconds	IN	number
+    ) RETURN date DETERMINISTIC;
+
+	FUNCTION date_to_unix_seconds (
+        in_date	IN	date
+    ) RETURN number DETERMINISTIC;
+
+	FUNCTION date_to_unix_milliseconds (
+        in_date	IN	date
+    ) RETURN number DETERMINISTIC;
+	
+END;
+/

@@ -1,0 +1,5 @@
+CREATE OR REPLACE EDITIONING VIEW &&SCHEMA.entities
+AS
+SELECT	id,
+		code
+FROM	&&SCHEMA.t_entities;
