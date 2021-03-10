@@ -16,6 +16,11 @@ IS
 	FUNCTION date_to_unix_milliseconds (
         in_date	IN	date
     ) RETURN number DETERMINISTIC;
+
+	PROCEDURE init_out_params (
+        out_code	OUT	number,
+		out_message	OUT	varchar2
+    );
 	
 END;
 /

@@ -53,5 +53,15 @@ IS
 		RETURN l_unix_milliseconds;
 	END date_to_unix_milliseconds;
 
+	PROCEDURE init_out_params (
+        out_code	OUT	number,
+		out_message	OUT	varchar2
+    )
+	IS
+	BEGIN
+		out_code	:= 0;
+		out_message	:= 'OK';
+	END init_out_params;
+	
 END;
 /

@@ -222,9 +222,8 @@ IS
 	PROCEDURE insert_trades_gtt (
 		in_batch_id			IN	trades_gtt.batch_id%type,
 		in_request_id		IN	trades_gtt.request_id%type,
-        in_trade_id_FROM	IN	trades_gtt.trade_id%type,
 		in_json				IN	clob,
-        out_trade_id_TO		OUT	trades_gtt.trade_id%type
+        out_trade_id_MIN	OUT	trades_gtt.trade_id%type
 	)
 	IS
 		lr_vw_requests	vw_requests%rowtype;
@@ -304,8 +303,8 @@ IS
 				) t
 		WHERE	lr_vw_requests.market = 'bitfinex';                    
 
-        SELECT	MAX(t.trade_id)
-        INTO	out_trade_id_TO
+        SELECT	MIN(t.trade_id)
+        INTO	out_trade_id_MIN
         FROM	trades_gtt t
         WHERE	t.batch_id = in_batch_id
         AND		t.request_id = in_request_id;
@@ -314,17 +313,20 @@ IS
 	EXCEPTION
 		WHEN OTHERS
 		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', request_id=' || in_request_id || ', trade_id_FROM=' || in_trade_id_FROM);
+            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', request_id=' || in_request_id);
 
 			ROLLBACK;
 	END insert_trades_gtt;
         
 	PROCEDURE insert_trades (
-		in_batch_id	IN	trades.batch_id%type
+		in_batch_id	IN	trades.batch_id%type,
+		out_code	OUT	number,
+		out_message	OUT	varchar2
 	)
 	IS
-		out_rc_txt	varchar2(4000);
 	BEGIN
+		UTILS_PKG.init_out_params(out_code, out_message);
+		
 		INSERT INTO trades (
 			id,
 			batch_id,
@@ -347,12 +349,15 @@ IS
 								ON	r.id = d.request_id
         WHERE	d.quantity >= r.min_quantity
         AND		d.batch_id = in_batch_id;
+
+		out_message := 'Inserted ' || SQL%ROWCOUNT || ' rows';
 		
 		COMMIT;
 	EXCEPTION
 		WHEN OTHERS
 		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id);
+			out_code	:= -1;
+            out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id);
 
 			ROLLBACK;
 	END insert_trades;	

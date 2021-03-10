@@ -18,13 +18,14 @@ IS
 	PROCEDURE insert_trades_gtt (
 		in_batch_id			IN	trades_gtt.batch_id%type,
 		in_request_id		IN	trades_gtt.request_id%type,
-        in_trade_id_FROM	IN	trades_gtt.trade_id%type,
 		in_json				IN	clob,
-        out_trade_id_TO		OUT	trades_gtt.trade_id%type
+        out_trade_id_MIN	OUT	trades_gtt.trade_id%type
 	);
 	
 	PROCEDURE insert_trades (
-		in_batch_id	IN	trades.batch_id%type
+		in_batch_id	IN	trades.batch_id%type,
+		out_code	OUT	number,
+		out_message	OUT	varchar2
 	);
 	
 END;
