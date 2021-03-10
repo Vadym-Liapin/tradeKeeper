@@ -3,23 +3,32 @@ IS
 
 	PROCEDURE get_active_endpoints (
 		in_batch_id	IN	batches.id%type,
-        out_cursor	OUT	sys_refcursor
+        out_cursor	OUT	sys_refcursor,
+		out_code	OUT	number,
+		out_message	OUT	varchar2
     );
 
-	FUNCTION create_batch
-	RETURN batches.id%type;
+	PROCEDURE create_batch (
+		out_batch_id	OUT	batches.id%type,
+		out_code		OUT	number,
+		out_message		OUT	varchar2
+	);
 
 	PROCEDURE insert_orders (
 		in_batch_id		IN	orders.batch_id%type,
 		in_request_id	IN	orders.request_id%type,	
-		in_json			IN	clob
+		in_json			IN	clob,
+		out_code		OUT	number,
+		out_message		OUT	varchar2
 	);
 
 	PROCEDURE insert_trades_gtt (
 		in_batch_id			IN	trades_gtt.batch_id%type,
 		in_request_id		IN	trades_gtt.request_id%type,
 		in_json				IN	clob,
-        out_trade_id_MIN	OUT	trades_gtt.trade_id%type
+        out_trade_id_MIN	OUT	trades_gtt.trade_id%type,
+		out_code			OUT	number,
+		out_message			OUT	varchar2
 	);
 	
 	PROCEDURE insert_trades (

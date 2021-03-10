@@ -38,14 +38,16 @@ if __name__ == '__main__':
 	cursor = connection.cursor()
 	in_batch_id = cursor.var(cx_Oracle.NUMBER)
 	in_json = cursor.var(cx_Oracle.CLOB)
+	out_batch_id = cursor.var(cx_Oracle.NUMBER)
 	out_cursor = cursor.var(cx_Oracle.CURSOR)
 	out_code = cursor.var(cx_Oracle.NUMBER)
 	out_message = cursor.var(cx_Oracle.STRING)
 	out_trade_id_MIN = cursor.var(cx_Oracle.STRING)
 	
-	cursor.callfunc('MARKETS_PKG.create_batch', in_batch_id, [])
+	cursor.callproc('MARKETS_PKG.create_batch', [out_batch_id, out_code, out_message])
 
-	cursor.callproc('MARKETS_PKG.get_active_endpoints', [in_batch_id, out_cursor])
+	in_batch_id.setvalue(0, out_batch_id.getvalue())
+	cursor.callproc('MARKETS_PKG.get_active_endpoints', [in_batch_id, out_cursor, out_code, out_message])
 	endpoints = out_cursor.getvalue().fetchall()
 	
 	for row in endpoints:
@@ -57,10 +59,10 @@ if __name__ == '__main__':
 		in_json.setvalue(0, response.text)
 		
 		if (in_entity == "orders"):
-			cursor.callproc('MARKETS_PKG.insert_orders', [in_batch_id, in_request_id, in_json])
+			cursor.callproc('MARKETS_PKG.insert_orders', [in_batch_id, in_request_id, in_json, out_code, out_message])
 			
 		if (in_entity == "trades" and in_market != "binance"):
-			cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_trade_id_MIN])
+			cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_trade_id_MIN, out_code, out_message])
 
 		if (in_entity == "trades" and in_market == "binance"):
 			trade_id_MIN = '0'
@@ -74,7 +76,7 @@ if __name__ == '__main__':
 				
 				debugLogger.info('response=' + response.text)
 				
-				cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_trade_id_MIN])
+				cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_trade_id_MIN, out_code, out_message])
 				if out_trade_id_MIN is None:
 					trade_id_MIN = '0'
 				else:

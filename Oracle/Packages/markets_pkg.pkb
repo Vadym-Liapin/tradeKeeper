@@ -38,13 +38,15 @@ IS
 
 	PROCEDURE get_active_endpoints (
 		in_batch_id	IN	batches.id%type,
-        out_cursor	OUT	sys_refcursor
+        out_cursor	OUT	sys_refcursor,
+		out_code	OUT	number,
+		out_message	OUT	varchar2
     )
 	IS
 		lr_batches	batches%rowtype;
-		
-		out_rc_txt	varchar2(4000);
 	BEGIN
+		UTILS_PKG.init_out_params(out_code, out_message);
+		
 		lr_batches := get_batches_row(in_id => in_batch_id);
 		
 		OPEN out_cursor
@@ -72,16 +74,20 @@ IS
 	EXCEPTION
 		WHEN OTHERS
 		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => 'in_batch_id=' || in_batch_id);
+			out_code	:= -1;
+            out_message	:= ERRORS_PKG.log_error(in_params => 'in_batch_id=' || in_batch_id);
 	END get_active_endpoints;
 
-	FUNCTION create_batch
-	RETURN batches.id%type
+	PROCEDURE create_batch (
+		out_batch_id	OUT	batches.id%type,
+		out_code		OUT	number,
+		out_message		OUT	varchar2
+	)
 	IS
-		l_batch_id	batches.id%type;
-		out_rc_txt	varchar2(4000);
 		l_created	batches.created%type;
 	BEGIN
+		UTILS_PKG.init_out_params(out_code, out_message);
+		
 		l_created := SYSDATE;
 		
 		INSERT INTO batches (
@@ -101,13 +107,12 @@ IS
 			UTILS_PKG.date_to_unix_milliseconds(l_created)
 		)
 		RETURNING 	id
-		INTO		l_batch_id;
-		
-		RETURN l_batch_id;
+		INTO		out_batch_id;
 	EXCEPTION
 		WHEN OTHERS
 		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => NULL);
+			out_code	:= -1;
+            out_message	:= ERRORS_PKG.log_error(in_params => NULL);
 
 			ROLLBACK;
 	END create_batch;
@@ -115,13 +120,15 @@ IS
 	PROCEDURE insert_orders (
 		in_batch_id		IN	orders.batch_id%type,
 		in_request_id	IN	orders.request_id%type,	
-		in_json			IN	clob
+		in_json			IN	clob,
+		out_code		OUT	number,
+		out_message		OUT	varchar2
 	)
 	IS
 		lr_vw_requests	vw_requests%rowtype;
-		
-		out_rc_txt	varchar2(4000);
 	BEGIN
+		UTILS_PKG.init_out_params(out_code, out_message);
+		
 		lr_vw_requests := get_vw_requests_row(in_id => in_request_id);
 		
 		INSERT INTO orders (
@@ -210,11 +217,14 @@ IS
         			ON	r.id = in_request_id
         WHERE	d.quantity >= r.min_quantity;
 		
+		out_message := 'Inserted ' || SQL%ROWCOUNT || ' orders';
+		
 		COMMIT;
 	EXCEPTION
 		WHEN OTHERS
 		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', request_id=' || in_request_id);
+			out_code	:= -1;
+            out_message	:= ERRORS_PKG.log_error(in_params => 'in_batch_id=' || in_batch_id);
 
 			ROLLBACK;
 	END insert_orders;
@@ -223,13 +233,15 @@ IS
 		in_batch_id			IN	trades_gtt.batch_id%type,
 		in_request_id		IN	trades_gtt.request_id%type,
 		in_json				IN	clob,
-        out_trade_id_MIN	OUT	trades_gtt.trade_id%type
+        out_trade_id_MIN	OUT	trades_gtt.trade_id%type,
+		out_code			OUT	number,
+		out_message			OUT	varchar2
 	)
 	IS
 		lr_vw_requests	vw_requests%rowtype;
-		
-		out_rc_txt	varchar2(4000);
 	BEGIN
+		UTILS_PKG.init_out_params(out_code, out_message);
+	
 		lr_vw_requests := get_vw_requests_row(in_id => in_request_id);
 		
 		INSERT INTO trades_gtt (
@@ -309,11 +321,14 @@ IS
         WHERE	t.batch_id = in_batch_id
         AND		t.request_id = in_request_id;
         
+		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
+		
 		COMMIT;
 	EXCEPTION
 		WHEN OTHERS
 		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', request_id=' || in_request_id);
+			out_code	:= -1;
+            out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id);
 
 			ROLLBACK;
 	END insert_trades_gtt;
@@ -350,7 +365,7 @@ IS
         WHERE	d.quantity >= r.min_quantity
         AND		d.batch_id = in_batch_id;
 
-		out_message := 'Inserted ' || SQL%ROWCOUNT || ' rows';
+		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
 		
 		COMMIT;
 	EXCEPTION
