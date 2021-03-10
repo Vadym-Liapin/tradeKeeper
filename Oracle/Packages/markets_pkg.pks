@@ -15,16 +15,16 @@ IS
 		in_json			IN	clob
 	);
 
-	PROCEDURE insert_trades (
-		in_batch_id		IN	trades.batch_id%type,
-		in_request_id	IN	trades.request_id%type,	
-		in_json			IN	clob
+	PROCEDURE insert_trades_gtt (
+		in_batch_id			IN	trades_gtt.batch_id%type,
+		in_request_id		IN	trades_gtt.request_id%type,
+        in_trade_id_FROM	IN	trades_gtt.trade_id%type,
+		in_json				IN	clob,
+        out_trade_id_TO		OUT	trades_gtt.trade_id%type
 	);
-
-	PROCEDURE insert_trades_binance (
-		in_batch_id		IN	trades.batch_id%type,
-		in_request_id	IN	trades.request_id%type,	
-		in_json			IN	clob
+	
+	PROCEDURE insert_trades (
+		in_batch_id	IN	trades.batch_id%type
 	);
 	
 END;

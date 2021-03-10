@@ -50,17 +50,23 @@ if __name__ == '__main__':
 		cursor = connection.cursor()
 		in_json = cursor.var(cx_Oracle.CLOB)
 		in_json.setvalue(0, response.text)
+		in_trade_id_FROM = cursor.var(cx_Oracle.STRING)
+		in_json.setvalue(0, '')
+		out_trade_id_TO = cursor.var(cx_Oracle.STRING)
 		
 		if (in_entity == "orders"):
 			cursor.callproc('MARKETS_PKG.insert_orders', [in_batch_id, in_request_id, in_json])
-		elif (in_entity == "trades" and in_market != "binance"):
-			cursor.callproc('MARKETS_PKG.insert_trades', [in_batch_id, in_request_id, in_json])
+			
+		if (in_entity == "trades" and in_market != "binance"):
+			cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_trade_id_FROM, in_json, out_trade_id_TO])
 
 		if (in_entity == "trades" and in_market == "binance"):
-			cursor.callproc('MARKETS_PKG.insert_trades_binance', [in_batch_id, in_request_id, in_json])
+			cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_trade_id_FROM, in_json, out_trade_id_TO])
+			debugLogger.info('in_json=' + response.text)
 			
-		cursor.close()
+	cursor.callproc('MARKETS_PKG.insert_trades', [in_batch_id])
 
+	cursor.close()
 	connection.close()
 	
 	#errorLogger.error('Error!')

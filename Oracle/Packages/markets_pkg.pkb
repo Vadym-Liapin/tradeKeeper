@@ -218,11 +218,13 @@ IS
 
 			ROLLBACK;
 	END insert_orders;
-	
-	PROCEDURE insert_trades (
-		in_batch_id		IN	trades.batch_id%type,
-		in_request_id	IN	trades.request_id%type,	
-		in_json			IN	clob
+
+	PROCEDURE insert_trades_gtt (
+		in_batch_id			IN	trades_gtt.batch_id%type,
+		in_request_id		IN	trades_gtt.request_id%type,
+        in_trade_id_FROM	IN	trades_gtt.trade_id%type,
+		in_json				IN	clob,
+        out_trade_id_TO		OUT	trades_gtt.trade_id%type
 	)
 	IS
 		lr_vw_requests	vw_requests%rowtype;
@@ -230,15 +232,40 @@ IS
 		out_rc_txt	varchar2(4000);
 	BEGIN
 		lr_vw_requests := get_vw_requests_row(in_id => in_request_id);
-
+		
 		INSERT INTO trades_gtt (
-			side_id,
+			batch_id,
+            request_id,
+            side_id,
 			trade_id,
 			created,
 			price,
 			quantity
 		)
-		SELECT	CASE t.side WHEN 0 THEN 3 WHEN 1 THEN 4 END AS side_id,
+		SELECT	in_batch_id AS batch_id,
+				in_request_id AS request_id,
+        		CASE t.is_buyer_maker WHEN 'false' THEN 3 WHEN 'true' THEN 4 END AS side_id,
+				t.trade_id,
+				(SELECT UTILS_PKG.unix_milliseconds_to_date(t.unix_milliseconds) FROM dual) AS created,
+				t.price,
+				t.quantity
+		FROM	JSON_TABLE(
+					in_json,
+					'$[*]'
+					COLUMNS (
+						rn 					FOR ORDINALITY,
+						trade_id			varchar2(15)	PATH '$.a',
+						price				number			PATH '$.p',
+						quantity			number			PATH '$.q',
+						unix_milliseconds	number			PATH '$.T',
+						is_buyer_maker		varchar2(5)		PATH '$.m'
+					)
+				) t
+		WHERE	lr_vw_requests.market = 'binance'
+        	UNION ALL
+		SELECT	in_batch_id AS batch_id,
+				in_request_id AS request_id,
+        		CASE t.side WHEN 0 THEN 3 WHEN 1 THEN 4 END AS side_id,
 				t.tid AS trade_id,
 				(SELECT UTILS_PKG.unix_seconds_to_date(t.unix_seconds) FROM dual) AS created,
 				t.price,
@@ -257,7 +284,9 @@ IS
 				) t
 		WHERE	lr_vw_requests.market = 'bitstamp'
 			UNION ALL
-		SELECT	CASE WHEN t.quantity >= 0 THEN 3 WHEN t.quantity < 0 THEN 4 END AS side_id,
+		SELECT	in_batch_id AS batch_id,
+				in_request_id AS request_id,
+                CASE WHEN t.quantity >= 0 THEN 3 WHEN t.quantity < 0 THEN 4 END AS side_id,
 				t.trade_id,
 				(SELECT UTILS_PKG.unix_milliseconds_to_date(t.unix_milliseconds) FROM dual) AS created,
 				t.price,
@@ -273,8 +302,29 @@ IS
 						quantity			number			PATH '$[2]'
 					)
 				) t
-		WHERE	lr_vw_requests.market = 'bitfinex';
-								
+		WHERE	lr_vw_requests.market = 'bitfinex';                    
+
+        SELECT	MAX(t.trade_id)
+        INTO	out_trade_id_TO
+        FROM	trades_gtt t
+        WHERE	t.batch_id = in_batch_id
+        AND		t.request_id = in_request_id;
+        
+		COMMIT;
+	EXCEPTION
+		WHEN OTHERS
+		THEN
+            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', request_id=' || in_request_id || ', trade_id_FROM=' || in_trade_id_FROM);
+
+			ROLLBACK;
+	END insert_trades_gtt;
+        
+	PROCEDURE insert_trades (
+		in_batch_id	IN	trades.batch_id%type
+	)
+	IS
+		out_rc_txt	varchar2(4000);
+	BEGIN
 		INSERT INTO trades (
 			id,
 			batch_id,
@@ -286,93 +336,26 @@ IS
 			quantity
 		)
 		SELECT	SQN_trades.NEXTVAL AS id,
-				in_batch_id AS batch_id,
-				in_request_id AS request_id,
+				d.batch_id,
+				d.request_id,
 				d.side_id,
 				d.trade_id,
 				d.created,
 				d.price,
 				d.quantity
 		FROM	trades_gtt d	INNER JOIN requests r
-								ON	r.id = in_request_id
-        WHERE	d.quantity >= r.min_quantity;
+								ON	r.id = d.request_id
+        WHERE	d.quantity >= r.min_quantity
+        AND		d.batch_id = in_batch_id;
 		
 		COMMIT;
 	EXCEPTION
 		WHEN OTHERS
 		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', request_id=' || in_request_id);
+            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id);
 
 			ROLLBACK;
 	END insert_trades;	
-	
-	PROCEDURE insert_trades_binance (
-		in_batch_id		IN	trades.batch_id%type,
-		in_request_id	IN	trades.request_id%type,	
-		in_json			IN	clob
-	)
-	IS
-		lr_vw_requests	vw_requests%rowtype;
-		
-		out_rc_txt	varchar2(4000);
-	BEGIN
-		lr_vw_requests := get_vw_requests_row(in_id => in_request_id);
-		
-		INSERT INTO trades_gtt (
-			side_id,
-			trade_id,
-			created,
-			price,
-			quantity
-		)
-		SELECT	CASE t.is_buyer_maker WHEN 'false' THEN 3 WHEN 'true' THEN 4 END AS side_id,
-				t.trade_id,
-				(SELECT UTILS_PKG.unix_milliseconds_to_date(t.unix_milliseconds) FROM dual) AS created,
-				t.price,
-				t.quantity
-		FROM	JSON_TABLE(
-					in_json,
-					'$[*]'
-					COLUMNS (
-						rn 					FOR ORDINALITY,
-						trade_id			varchar2(15)	PATH '$.a',
-						price				number			PATH '$.p',
-						quantity			number			PATH '$.q',
-						unix_milliseconds	number			PATH '$.T',
-						is_buyer_maker		varchar2(5)		PATH '$.m'
-					)
-				) t
-		WHERE	lr_vw_requests.market = 'binance';
 
-		INSERT INTO trades (
-			id,
-			batch_id,
-			request_id,
-			side_id,
-			trade_id,
-			created,
-			price,
-			quantity
-		)
-		SELECT	SQN_trades.NEXTVAL AS id,
-				in_batch_id AS batch_id,
-				in_request_id AS request_id,
-				d.side_id,
-				d.trade_id,
-				d.created,
-				d.price,
-				d.quantity
-		FROM	trades_gtt d	INNER JOIN requests r
-								ON	r.id = in_request_id
-        WHERE	d.quantity >= r.min_quantity;
-		
-		COMMIT;
-	EXCEPTION
-		WHEN OTHERS
-		THEN
-            out_rc_txt := ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', request_id=' || in_request_id);
-
-			ROLLBACK;
-	END insert_trades_binance;		
 END;
 /
