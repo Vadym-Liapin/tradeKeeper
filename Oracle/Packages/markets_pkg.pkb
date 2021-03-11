@@ -52,15 +52,17 @@ IS
 		OPEN out_cursor
 		FOR
 			SELECT	r.id AS request_id,
+					r.parent_id AS request_parent_id,
+					r.endpoint,
 					REPLACE(
 						REPLACE(
-							r.endpoint, 
+							r.params, 
 							'%ds_unix_ms%', 
 							lr_batches.ds_unix_ms
 						),
 						'%df_unix_ms%',
 						lr_batches.df_unix_ms
-					) AS endpoint,
+					) AS params,
 					e.code AS entity,
 					m.code AS market
 			FROM	requests r	INNER JOIN entities e
@@ -70,6 +72,7 @@ IS
 			WHERE	r.active = 1
 			ORDER BY	r.entity_id,
 						r.market_id,
+						NVL(r.parent_id, r.id),
 						r.id;
 	EXCEPTION
 		WHEN OTHERS
@@ -233,7 +236,7 @@ IS
 		in_batch_id			IN	trades_gtt.batch_id%type,
 		in_request_id		IN	trades_gtt.request_id%type,
 		in_json				IN	clob,
-        out_trade_id_MIN	OUT	trades_gtt.trade_id%type,
+        out_trade_id_LAST	OUT	trades_gtt.trade_id%type,
 		out_code			OUT	number,
 		out_message			OUT	varchar2
 	)
@@ -315,8 +318,8 @@ IS
 				) t
 		WHERE	lr_vw_requests.market = 'bitfinex';                    
 
-        SELECT	MIN(t.trade_id)
-        INTO	out_trade_id_MIN
+        SELECT	MAX(t.trade_id)
+        INTO	out_trade_id_LAST
         FROM	trades_gtt t
         WHERE	t.batch_id = in_batch_id
         AND		t.request_id = in_request_id;

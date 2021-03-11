@@ -1,10 +1,12 @@
 CREATE OR REPLACE VIEW &&SCHEMA.vw_requests
 AS
 SELECT	r.id,
+		r.parent_id,
 		e.code AS entity,
 		m.code AS market,
 		s.code AS symbol,
 		r.endpoint,
+		r.params,
 		r.active
 FROM	&&SCHEMA.requests r	INNER JOIN &&SCHEMA.entities e
 								ON	e.id = r.entity_id
