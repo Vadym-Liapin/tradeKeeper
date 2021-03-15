@@ -2,16 +2,15 @@ CREATE OR REPLACE PACKAGE &&SCHEMA.markets_pkg
 IS
 
 	PROCEDURE get_active_endpoints (
-		in_batch_id	IN	batches.id%type,
         out_cursor	OUT	sys_refcursor,
 		out_code	OUT	number,
 		out_message	OUT	varchar2
     );
 
 	PROCEDURE create_batch (
-		out_batch_id	OUT	batches.id%type,
-		out_code		OUT	number,
-		out_message		OUT	varchar2
+		out_cursor	OUT	sys_refcursor,
+		out_code	OUT	number,
+		out_message	OUT	varchar2
 	);
 
 	PROCEDURE insert_orders (

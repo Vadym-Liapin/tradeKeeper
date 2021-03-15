@@ -1,5 +1,9 @@
 CREATE OR REPLACE PACKAGE BODY &&SCHEMA.markets_pkg
 IS
+	eMyError	exception;
+	eMyLock		exception;
+    PRAGMA EXCEPTION_INIT (eMyLock, -54);
+
 	FUNCTION get_vw_requests_row (
 		in_id	IN	vw_requests.id%type
 	) RETURN vw_requests%rowtype
@@ -19,50 +23,56 @@ IS
 	END get_vw_requests_row;
 	
 	FUNCTION get_batches_row (
-		in_id	IN	batches.id%type
+		in_id		IN	batches.id%type,
+		in_lock		IN	boolean,
+		out_code	OUT	number,
+		out_message	OUT	varchar2
 	) RETURN batches%rowtype
 	IS
 		lr_batches	batches%rowtype;
 	BEGIN
-		SELECT	b.*
-		INTO	lr_batches
-		FROM	batches b
-		WHERE	b.id = in_id;
+		UTILS_PKG.init_out_params(out_code, out_message);
+		
+		IF in_lock
+		THEN
+			SELECT	b.*
+			INTO	lr_batches
+			FROM	batches b
+			WHERE	b.id = in_id
+			FOR UPDATE NOWAIT;
+		ELSE
+			SELECT	b.*
+			INTO	lr_batches
+			FROM	batches b
+			WHERE	b.id = in_id;
+		END IF;
 		
 		RETURN lr_batches;
 	EXCEPTION
+		WHEN eMyLock
+		THEN
+			out_code	:= -1;
+            out_message	:= 'BatchID ' || in_id || ' is locked by another session';
 		WHEN NO_DATA_FOUND
 		THEN
 			RETURN NULL;
 	END get_batches_row;
 
 	PROCEDURE get_active_endpoints (
-		in_batch_id	IN	batches.id%type,
         out_cursor	OUT	sys_refcursor,
 		out_code	OUT	number,
 		out_message	OUT	varchar2
     )
 	IS
-		lr_batches	batches%rowtype;
 	BEGIN
 		UTILS_PKG.init_out_params(out_code, out_message);
-		
-		lr_batches := get_batches_row(in_id => in_batch_id);
 		
 		OPEN out_cursor
 		FOR
 			SELECT	r.id AS request_id,
 					r.parent_id AS request_parent_id,
 					r.endpoint,
-					REPLACE(
-						REPLACE(
-							r.params, 
-							'%ds_unix_ms%', 
-							lr_batches.ds_unix_ms
-						),
-						'%df_unix_ms%',
-						lr_batches.df_unix_ms
-					) AS params,
+					r.params,
 					e.code AS entity,
 					m.code AS market
 			FROM	requests r	INNER JOIN entities e
@@ -70,24 +80,28 @@ IS
 								INNER JOIN markets m
 								ON	m.id = r.market_id
 			WHERE	r.active = 1
-			ORDER BY	r.entity_id,
+			ORDER BY	CASE e.code WHEN 'orders' THEN 1 WHEN 'trades' THEN 2 ELSE 3 END,
 						r.market_id,
 						NVL(r.parent_id, r.id),
 						r.id;
 	EXCEPTION
+		WHEN eMyError
+		THEN
+			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => 'in_batch_id=' || in_batch_id);
+            out_message	:= ERRORS_PKG.log_error(in_params => NULL);
 	END get_active_endpoints;
 
 	PROCEDURE create_batch (
-		out_batch_id	OUT	batches.id%type,
-		out_code		OUT	number,
-		out_message		OUT	varchar2
+		out_cursor	OUT	sys_refcursor,
+		out_code	OUT	number,
+		out_message	OUT	varchar2
 	)
 	IS
 		l_created	batches.created%type;
+		l_id		batches.id%type;
 	BEGIN
 		UTILS_PKG.init_out_params(out_code, out_message);
 		
@@ -110,8 +124,23 @@ IS
 			UTILS_PKG.date_to_unix_milliseconds(l_created)
 		)
 		RETURNING 	id
-		INTO		out_batch_id;
+		INTO		l_id;
+		
+		OPEN out_cursor
+		FOR
+			SELECT	b.id,
+					b.ds_unix_s,
+					b.df_unix_s,
+					b.ds_unix_ms,
+					b.df_unix_ms,
+					b.ds_unix_ms - 10000 AS ds_unix_ms_m10s
+			FROM	batches b
+			WHERE	b.id = l_id;
+		
 	EXCEPTION
+		WHEN eMyError
+		THEN
+			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
@@ -128,11 +157,18 @@ IS
 		out_message		OUT	varchar2
 	)
 	IS
+		lr_batches		batches%rowtype;
 		lr_vw_requests	vw_requests%rowtype;
 	BEGIN
 		UTILS_PKG.init_out_params(out_code, out_message);
-		
-		lr_vw_requests := get_vw_requests_row(in_id => in_request_id);
+
+		lr_batches := get_batches_row(in_id => in_batch_id, in_lock => TRUE, out_code => out_code, out_message => out_message);
+		IF out_code <> 0
+		THEN
+			RAISE eMyError;
+		END IF;
+
+		lr_vw_requests 	:= get_vw_requests_row(in_id => in_request_id);
 		
 		INSERT INTO orders (
 			id,
@@ -224,6 +260,9 @@ IS
 		
 		COMMIT;
 	EXCEPTION
+		WHEN eMyError
+		THEN
+			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
@@ -241,11 +280,18 @@ IS
 		out_message			OUT	varchar2
 	)
 	IS
+		lr_batches		batches%rowtype;
 		lr_vw_requests	vw_requests%rowtype;
 	BEGIN
 		UTILS_PKG.init_out_params(out_code, out_message);
-	
-		lr_vw_requests := get_vw_requests_row(in_id => in_request_id);
+		
+		lr_batches := get_batches_row(in_id => in_batch_id, in_lock => TRUE, out_code => out_code, out_message => out_message);
+		IF out_code <> 0
+		THEN
+			RAISE eMyError;
+		END IF;
+
+		lr_vw_requests 	:= get_vw_requests_row(in_id => in_request_id);
 		
 		INSERT INTO trades_gtt (
 			batch_id,
@@ -318,16 +364,19 @@ IS
 				) t
 		WHERE	lr_vw_requests.market = 'bitfinex';                    
 
+		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
+
+		COMMIT;
+		
         SELECT	MAX(t.trade_id)
         INTO	out_trade_id_LAST
         FROM	trades_gtt t
         WHERE	t.batch_id = in_batch_id
         AND		t.request_id = in_request_id;
-        
-		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
-		
-		COMMIT;
 	EXCEPTION
+		WHEN eMyError
+		THEN
+			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
@@ -342,8 +391,15 @@ IS
 		out_message	OUT	varchar2
 	)
 	IS
+		lr_batches	batches%rowtype;
 	BEGIN
 		UTILS_PKG.init_out_params(out_code, out_message);
+		
+		lr_batches := get_batches_row(in_id => in_batch_id, in_lock => TRUE, out_code => out_code, out_message => out_message);
+		IF out_code <> 0
+		THEN
+			RAISE eMyError;
+		END IF;
 		
 		INSERT INTO trades (
 			id,
@@ -372,6 +428,9 @@ IS
 		
 		COMMIT;
 	EXCEPTION
+		WHEN eMyError
+		THEN
+			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
