@@ -2,6 +2,8 @@ CREATE OR REPLACE EDITIONING VIEW &&SCHEMA.batches
 AS
 SELECT	id,
 		created,
+		ds,
+		df,
 		ds_unix_s,
 		df_unix_s,
 		ds_unix_ms,

@@ -7,5 +7,6 @@ SELECT	id,
 		trade_id,
 		created,
 		price,
-		quantity
+		quantity,
+		aggregate
 FROM	&&SCHEMA.t_trades;

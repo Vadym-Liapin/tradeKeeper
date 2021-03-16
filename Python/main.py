@@ -47,8 +47,9 @@ def createBatch(connection):
 					'df_unix_s': 		row[2], 
 					'ds_unix_ms': 		row[3], 
 					'df_unix_ms': 		row[4], 
-					'ds_unix_ms_m10s': 	row[5]
-		
+					'ds_unix_ms_p10s': 	row[5]
+				}
+				
 	return result
 
 def getActiveEndpoints(connection, batch):
@@ -72,7 +73,7 @@ def getActiveEndpoints(connection, batch):
 				'%df_unix_s%': 			str(batch.get('df_unix_s')),
 				'%ds_unix_ms%': 		str(batch.get('ds_unix_ms')),
 				'%df_unix_ms%': 		str(batch.get('df_unix_ms')),
-				'%ds_unix_ms_m10s%': 	str(batch.get('ds_unix_ms_m10s'))
+				'%ds_unix_ms_p10s%': 	str(batch.get('ds_unix_ms_p10s'))
 			}
 			
 	result = []
@@ -89,6 +90,56 @@ def getActiveEndpoints(connection, batch):
 		result.append(endpoint)
 
 	return result
+
+def insertOrders(connection, batchId, requestId, response):
+	cursor = connection.cursor()
+	
+	in_batch_id = cursor.var(cx_Oracle.NUMBER)
+	in_request_id = cursor.var(cx_Oracle.NUMBER)
+	in_json = cursor.var(cx_Oracle.CLOB)
+	out_code = cursor.var(cx_Oracle.NUMBER)
+	out_message = cursor.var(cx_Oracle.STRING)
+
+	in_batch_id = batchId
+	in_request_id = requestId
+	in_json.setvalue(0, response)
+	
+	cursor.callproc('MARKETS_PKG.insert_orders', [in_batch_id, in_request_id, in_json, out_code, out_message])
+	cursor.close()
+	
+	return {'code': int(out_code.getvalue()), 'message': out_message.getvalue()}
+
+def insertTradesGTT(connection, batchId, requestId, response):
+	cursor = connection.cursor()
+	
+	in_batch_id = cursor.var(cx_Oracle.NUMBER)
+	in_request_id = cursor.var(cx_Oracle.NUMBER)
+	in_json = cursor.var(cx_Oracle.CLOB)
+	out_code = cursor.var(cx_Oracle.NUMBER)
+	out_message = cursor.var(cx_Oracle.STRING)
+
+	in_batch_id = batchId
+	in_request_id = requestId
+	in_json.setvalue(0, response)
+	
+	cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_code, out_message])
+	cursor.close()
+	
+	return {'code': int(out_code.getvalue()), 'message': out_message.getvalue()}
+
+def insertTrades(connection, batchId):
+	cursor = connection.cursor()
+	
+	in_batch_id = cursor.var(cx_Oracle.NUMBER)
+	out_code = cursor.var(cx_Oracle.NUMBER)
+	out_message = cursor.var(cx_Oracle.STRING)
+
+	in_batch_id = batchId
+	
+	cursor.callproc('MARKETS_PKG.insert_trades', [in_batch_id, out_code, out_message])
+	cursor.close()
+	
+	return {'code': int(out_code.getvalue()), 'message': out_message.getvalue()}
 	
 if __name__ == '__main__':
 	errorLogger = initLogger('error', 'error.log')
@@ -97,77 +148,53 @@ if __name__ == '__main__':
 	connection = connect()
 	
 	batch = createBatch(connection)
-	debugLogger.info('batch=' + str(batch))
+	batchId = batch.get('id')
+	batchDfUnixMs = batch.get('df_unix_ms')
+	#debugLogger.info('batch=' + str(batch))
+	
 	activeEndpoints = getActiveEndpoints(connection, batch)
-	debugLogger.info('activeEndpoints=' + str(activeEndpoints))
-	
-	exit(0)
-	
-	cursor = connection.cursor()
-	in_batch_id = cursor.var(cx_Oracle.NUMBER)
-	in_json = cursor.var(cx_Oracle.CLOB)
-	out_batch_id = cursor.var(cx_Oracle.NUMBER)
-	out_cursor = cursor.var(cx_Oracle.CURSOR)
-	out_code = cursor.var(cx_Oracle.NUMBER)
-	out_message = cursor.var(cx_Oracle.STRING)
-	out_trade_id_LAST = cursor.var(cx_Oracle.STRING)
+	#debugLogger.info('activeEndpoints=' + str(activeEndpoints))
 	
 	for row in activeEndpoints:
-		in_batch_id = batch.get('id')
-		in_request_id = row.get('request_id')
-		in_request_parent_id = row.get('request_parent_id')
-		in_entity = row.get('entity')
-		in_market = row.get('market')
+		requestId = row.get('request_id')
+		request = str(row.get('endpoint')) + str(row.get('params'))
+		requestParentId = row.get('request_parent_id')
+		entity = row.get('entity')
+		market = row.get('market')
 		
-		if (in_entity == "orders"):
-			request = str(row.get('endpoint')) + str(row.get('params'))
+		if (entity == "orders"):
 			response = requests.get(request)
-			in_json.setvalue(0, response.text)
+			insertOrders(connection, batchId, requestId, response.text)
 			
-			cursor.callproc('MARKETS_PKG.insert_orders', [in_batch_id, in_request_id, in_json, out_code, out_message])
-			
-		elif (in_entity == "trades" and in_market != "binance"):
-			request = str(row.get('endpoint')) + str(row.get('params'))
+		elif (entity == "trades" and market != "binance"):
 			response = requests.get(request)
-			in_json.setvalue(0, response.text)
+			insertTradesGTT(connection, batchId, requestId, response.text)
 
-			cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_trade_id_LAST, out_code, out_message])
-
-		elif (in_entity == "trades" and in_market == "binance"):
-			if in_request_parent_id is None:
-				request = str(row.get('endpoint')) + str(row.get('params'))
-				debugLogger.info('request=' + request)
+		elif (entity == "trades" and market == "binance"):
+			if requestParentId is None:
 				response = requests.get(request)
-				in_json.setvalue(0, response.text)
-				debugLogger.info('response=' + response.text)
-			
-				cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_trade_id_LAST, out_code, out_message])
-				debugLogger.info('out_trade_id_LAST=' + str(out_trade_id_LAST.getvalue()) + ', out_code=' + str(out_code.getvalue()) + ', out_message=' + out_message.getvalue())
-				
-				trade_id_LAST = out_trade_id_LAST.getvalue()
-				trade_id_PREV = trade_id_LAST
+				responseJSON = response.json()
+				fromId = int(responseJSON[0]['a'])
+				created = int(responseJSON[0]['T'])
+				#debugLogger.info('fromId=' + str(fromId) + ', created=' + str(created))
 			else:
-				for i in range(30):
-					request = str(row.get('endpoint')) + str(row.get('params').replace('%trade_id_LAST%', str(trade_id_PREV)))
-					debugLogger.info('request=' + request)
-					response = requests.get(request)
-					in_json.setvalue(0, response.text)
-					debugLogger.info('response=' + response.text)
+				for i in range(1000):
+					response = requests.get(request.replace('%fromId%', str(fromId)))
+					responseJSON = response.json()
+					insertTradesGTT(connection, batchId, requestId, response.text)
 					
-					cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_trade_id_LAST, out_code, out_message])
-					debugLogger.info('out_trade_id_LAST=' + str(out_trade_id_LAST.getvalue()) + ', out_code=' + str(out_code.getvalue()) + ', out_message=' + str(out_message.getvalue()))
+					fromIdLast = int(responseJSON[-1]['a'])
+					createdLast = int(responseJSON[-1]['T'])
+					#debugLogger.info('i=' + str(i) + ', fromId=' + str(fromIdLast) + ', created=' + str(createdLast) + ', batchDfUnixMs=' + str(batchDfUnixMs))
 					
-					trade_id_LAST = out_trade_id_LAST.getvalue()
-						
-					if int(trade_id_LAST) > int(trade_id_PREV):
-						trade_id_PREV = trade_id_LAST
+					if fromIdLast > fromId and createdLast < batchDfUnixMs:
+						fromId = fromIdLast
 						i = i + 1
 					else:
 						break
 			
-	cursor.callproc('MARKETS_PKG.insert_trades', [in_batch_id, out_code, out_message])
+	insertTrades(connection, batchId)
 
-	cursor.close()
 	connection.close()
 	
 	#errorLogger.error('Error!')

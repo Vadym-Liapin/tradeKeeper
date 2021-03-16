@@ -87,7 +87,8 @@ IS
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= ERRORS_PKG.log_error(in_params => 'out_code=' || out_code || ', out_message=' || out_message);
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
@@ -109,7 +110,9 @@ IS
 		
 		INSERT INTO batches (
 			id, 
-			created, 
+			created,
+			ds,
+			df,
 			ds_unix_s, 
 			df_unix_s,
 			ds_unix_ms, 
@@ -117,6 +120,8 @@ IS
 		)
 		VALUES (
 			SQN_batches.NEXTVAL, 
+			l_created,
+			l_created - 1/24,
 			l_created,
 			UTILS_PKG.date_to_unix_seconds(l_created - 1/24),
 			UTILS_PKG.date_to_unix_seconds(l_created),
@@ -133,14 +138,17 @@ IS
 					b.df_unix_s,
 					b.ds_unix_ms,
 					b.df_unix_ms,
-					b.ds_unix_ms - 10000 AS ds_unix_ms_m10s
+					b.ds_unix_ms + 10000 AS ds_unix_ms_p10s
 			FROM	batches b
 			WHERE	b.id = l_id;
 		
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= ERRORS_PKG.log_error(in_params => 'out_code=' || out_code || ', out_message=' || out_message);
+			
+			ROLLBACK;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
@@ -262,22 +270,24 @@ IS
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', in_request_id=' || in_request_id || ', out_code=' || out_code || ', out_message=' || out_message);
+			
+			ROLLBACK;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => 'in_batch_id=' || in_batch_id);
+            out_message	:= ERRORS_PKG.log_error(in_params => 'in_batch_id=' || in_batch_id || ', in_request_id=' || in_request_id);
 
 			ROLLBACK;
 	END insert_orders;
 
 	PROCEDURE insert_trades_gtt (
-		in_batch_id			IN	trades_gtt.batch_id%type,
-		in_request_id		IN	trades_gtt.request_id%type,
-		in_json				IN	clob,
-        out_trade_id_LAST	OUT	trades_gtt.trade_id%type,
-		out_code			OUT	number,
-		out_message			OUT	varchar2
+		in_batch_id		IN	trades_gtt.batch_id%type,
+		in_request_id	IN	trades_gtt.request_id%type,
+		in_json			IN	clob,
+		out_code		OUT	number,
+		out_message		OUT	varchar2
 	)
 	IS
 		lr_batches		batches%rowtype;
@@ -367,20 +377,17 @@ IS
 		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
 
 		COMMIT;
-		
-        SELECT	MAX(t.trade_id)
-        INTO	out_trade_id_LAST
-        FROM	trades_gtt t
-        WHERE	t.batch_id = in_batch_id
-        AND		t.request_id = in_request_id;
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', in_request_id=' || in_request_id || ', out_code=' || out_code || ', out_message=' || out_message);
+			
+			ROLLBACK;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id);
+            out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', in_request_id=' || in_request_id);
 
 			ROLLBACK;
 	END insert_trades_gtt;
@@ -409,7 +416,8 @@ IS
 			trade_id,
 			created,
 			price,
-			quantity
+			quantity,
+			aggregate
 		)
 		SELECT	SQN_trades.NEXTVAL AS id,
 				d.batch_id,
@@ -418,19 +426,198 @@ IS
 				d.trade_id,
 				d.created,
 				d.price,
-				d.quantity
+				d.quantity,
+				NULL
 		FROM	trades_gtt d	INNER JOIN requests r
 								ON	r.id = d.request_id
         WHERE	d.quantity >= r.min_quantity
-        AND		d.batch_id = in_batch_id;
+        AND		d.batch_id = lr_batches.id
+		AND		d.created BETWEEN lr_batches.ds AND lr_batches.df;
 
-		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
+		out_message := out_message || 'Inserted ' || SQL%ROWCOUNT || ' trades; ';
+
+		INSERT INTO trades (
+			id,
+			batch_id,
+			request_id,
+			side_id,
+			trade_id,
+			created,
+			price,
+			quantity,
+			aggregate
+		)
+		SELECT	SQN_trades.NEXTVAL AS id,
+				d.batch_id,
+				d.request_id,
+				d.side_id,
+				d.trade_id,
+				d.created,
+				d.price,
+				d.quantity,
+				d.aggregate
+		FROM	(
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							NULL AS price,
+							SUM(d.quantity) AS quantity,
+							'SUM.QUANTITY.ALL' AS aggregate
+					FROM	trades_gtt d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MIN(d.price) AS price,
+							NULL AS quantity,
+							'MIN.PRICE.ALL' AS aggregate
+					FROM	trades_gtt d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MAX(d.price) AS price,
+							NULL AS quantity,
+							'MAX.PRICE.ALL' AS aggregate
+					FROM	trades_gtt d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MIN(d.price) KEEP (DENSE_RANK FIRST ORDER BY d.created) AS price,
+							NULL AS quantity,
+							'FIRST.PRICE.ALL' AS aggregate
+					FROM	trades_gtt d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MAX(d.price) KEEP (DENSE_RANK LAST ORDER BY d.created) AS price,
+							NULL AS quantity,
+							'LAST.PRICE.ALL' AS aggregate
+					FROM	trades_gtt d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							NULL AS price,
+							SUM(d.quantity) AS quantity,
+							'SUM.QUANTITY.BIG' AS aggregate
+					FROM	trades d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.aggregate IS NULL
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MIN(d.price) AS price,
+							NULL AS quantity,
+							'MIN.PRICE.BIG' AS aggregate
+					FROM	trades d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.aggregate IS NULL
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MAX(d.price) AS price,
+							NULL AS quantity,
+							'MAX.PRICE.BIG' AS aggregate
+					FROM	trades d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.aggregate IS NULL
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MIN(d.price) KEEP (DENSE_RANK FIRST ORDER BY d.created) AS price,
+							NULL AS quantity,
+							'FIRST.PRICE.BIG' AS aggregate
+					FROM	trades d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.aggregate IS NULL
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+						UNION ALL
+					SELECT	d.batch_id,
+							d.request_id,
+							d.side_id,
+							NULL AS trade_id,
+							NULL AS created,
+							MAX(d.price) KEEP (DENSE_RANK LAST ORDER BY d.created) AS price,
+							NULL AS quantity,
+							'LAST.PRICE.BIG' AS aggregate
+					FROM	trades d
+					WHERE	d.batch_id = lr_batches.id
+					AND		d.aggregate IS NULL
+					GROUP BY	d.batch_id,
+								d.request_id,
+								d.side_id
+				) d;
+		
+		out_message := out_message || 'Inserted ' || SQL%ROWCOUNT || ' aggregates; ';
 		
 		COMMIT;
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code := CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', out_code=' || out_code || ', out_message=' || out_message);
+			
+			ROLLBACK;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;

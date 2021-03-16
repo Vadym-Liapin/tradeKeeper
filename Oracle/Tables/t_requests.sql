@@ -100,7 +100,7 @@ SELECT	6 AS id,
 		1 AS market_id,	
 		2 AS symbol_id,	
 		'https://api.binance.com/api/v3/aggTrades' AS endpoint,
-		'?symbol=BTCUSDT&' || 'startTime=%ds_unix_ms_m10s%&' || 'endTime=%ds_unix_ms%&' || 'limit=1000' AS params,
+		'?symbol=BTCUSDT&' || 'startTime=%ds_unix_ms%&' || 'endTime=%ds_unix_ms_p10s%&' || 'limit=1000' AS params,
 		1 AS active, 
 		1 AS min_quantity		
 FROM 	dual
@@ -112,7 +112,7 @@ SELECT	7 AS id,
 		1 AS market_id,	
 		2 AS symbol_id,	
 		'https://api.binance.com/api/v3/aggTrades' AS endpoint,
-		'?symbol=BTCUSDT&' || 'fromId=%trade_id_LAST%&' || 'limit=1000' AS params,
+		'?symbol=BTCUSDT&' || 'fromId=%fromId%&' || 'limit=1000' AS params,
 		1 AS active, 
 		1 AS min_quantity		
 FROM 	dual

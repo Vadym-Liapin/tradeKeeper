@@ -22,12 +22,11 @@ IS
 	);
 
 	PROCEDURE insert_trades_gtt (
-		in_batch_id			IN	trades_gtt.batch_id%type,
-		in_request_id		IN	trades_gtt.request_id%type,
-		in_json				IN	clob,
-        out_trade_id_LAST	OUT	trades_gtt.trade_id%type,
-		out_code			OUT	number,
-		out_message			OUT	varchar2
+		in_batch_id		IN	trades_gtt.batch_id%type,
+		in_request_id	IN	trades_gtt.request_id%type,
+		in_json			IN	clob,
+		out_code		OUT	number,
+		out_message		OUT	varchar2
 	);
 	
 	PROCEDURE insert_trades (
