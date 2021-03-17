@@ -7,6 +7,7 @@ CREATE TABLE &&SCHEMA.t_trades (
 	created			date,
 	price			number,
 	quantity		number,
+	cnt				number,
 	aggregate		varchar2(50),
     CONSTRAINT t_trades_pk				PRIMARY KEY (id),
 	CONSTRAINT t_trades_batch_id_fk		FOREIGN KEY (batch_id) REFERENCES &&SCHEMA.t_batches (id),
@@ -15,7 +16,8 @@ CREATE TABLE &&SCHEMA.t_trades (
 	CONSTRAINT t_trades_trade_id_chk	CHECK(aggregate IS NOT NULL OR (aggregate IS NULL AND trade_id IS NOT NULL)),
 	CONSTRAINT t_trades_created_chk		CHECK(aggregate IS NOT NULL OR (aggregate IS NULL AND created IS NOT NULL)),
 	CONSTRAINT t_trades_price_chk		CHECK(aggregate IS NOT NULL OR (aggregate IS NULL AND price IS NOT NULL)),
-	CONSTRAINT t_trades_quantity_chk	CHECK(aggregate IS NOT NULL OR (aggregate IS NULL AND quantity IS NOT NULL))
+	CONSTRAINT t_trades_quantity_chk	CHECK(aggregate IS NOT NULL OR (aggregate IS NULL AND quantity IS NOT NULL)),
+	CONSTRAINT t_trades_cnt_chk			CHECK(aggregate IS NOT NULL OR (aggregate IS NULL AND cnt IS NOT NULL))
 )
 PARTITION BY REFERENCE (t_trades_batch_id_fk);
 
@@ -29,4 +31,5 @@ COMMENT ON COLUMN &&SCHEMA.t_trades.trade_id	IS 'Trade ID';
 COMMENT ON COLUMN &&SCHEMA.t_trades.created		IS 'Created Date';
 COMMENT ON COLUMN &&SCHEMA.t_trades.price		IS 'Price';
 COMMENT ON COLUMN &&SCHEMA.t_trades.quantity	IS 'Quantity';
-COMMENT ON COLUMN &&SCHEMA.t_trades.aggregate	IS 'Aggregate (Function.Expression)';
+COMMENT ON COLUMN &&SCHEMA.t_trades.cnt			IS 'Count';
+COMMENT ON COLUMN &&SCHEMA.t_trades.aggregate	IS 'Aggregate Description';

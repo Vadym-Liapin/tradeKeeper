@@ -8,5 +8,6 @@ SELECT	id,
 		created,
 		price,
 		quantity,
+		cnt,
 		aggregate
 FROM	&&SCHEMA.t_trades;

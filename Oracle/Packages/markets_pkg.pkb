@@ -116,7 +116,9 @@ IS
 			ds_unix_s, 
 			df_unix_s,
 			ds_unix_ms, 
-			df_unix_ms
+			df_unix_ms,
+			ds_ISO8601,
+			df_ISO8601
 		)
 		VALUES (
 			SQN_batches.NEXTVAL, 
@@ -126,7 +128,9 @@ IS
 			UTILS_PKG.date_to_unix_seconds(l_created - 1/24),
 			UTILS_PKG.date_to_unix_seconds(l_created),
 			UTILS_PKG.date_to_unix_milliseconds(l_created - 1/24),
-			UTILS_PKG.date_to_unix_milliseconds(l_created)
+			UTILS_PKG.date_to_unix_milliseconds(l_created),
+			to_char(l_created - 1/24, 'YYYY-MM-DD') || 'T' || to_char(l_created - 1/24, 'HH24:MI:SS'),
+			to_char(l_created, 'YYYY-MM-DD') || 'T' || to_char(l_created, 'HH24:MI:SS')
 		)
 		RETURNING 	id
 		INTO		l_id;
@@ -138,7 +142,9 @@ IS
 					b.df_unix_s,
 					b.ds_unix_ms,
 					b.df_unix_ms,
-					b.ds_unix_ms + 10000 AS ds_unix_ms_p10s
+					b.ds_unix_ms + 10000 AS ds_unix_ms_p10s,
+					b.ds_ISO8601,
+					b.df_ISO8601
 			FROM	batches b
 			WHERE	b.id = l_id;
 		
@@ -259,10 +265,44 @@ IS
 											)
 										) t
 								WHERE	lr_vw_requests.market = 'bitfinex'
+
+									UNION ALL
+								SELECT	1 AS side_id,
+										t.price,
+										t.quantity,
+										SUM(t.quantity) OVER (ORDER BY t.rn ASC) AS quantity_CUM
+								FROM	JSON_TABLE(
+											in_json,
+											'$.bid[*]'
+											COLUMNS (
+												rn 			FOR ORDINALITY,
+												price		number	PATH '$.price',
+												quantity	number	PATH '$.size'
+											)
+										) t
+								WHERE	lr_vw_requests.market = 'hitbtc'
+									UNION ALL
+								SELECT	2 AS side_id,
+										t.price,
+										t.quantity,
+										SUM(t.quantity) OVER (ORDER BY t.rn ASC) AS quantity_CUM
+								FROM	JSON_TABLE(
+											in_json,
+											'$.ask[*]'
+											COLUMNS (
+												rn 			FOR ORDINALITY,
+												price		number	PATH '$.price',
+												quantity	number	PATH '$.size'
+											)
+										) t
+								WHERE	lr_vw_requests.market = 'hitbtc'
 							) d
 				) d	INNER JOIN requests r
         			ON	r.id = in_request_id
-        WHERE	d.quantity >= r.min_quantity;
+					INNER JOIN big_sets bs
+					ON	bs.symbol_id = r.symbol_id
+					AND	bs.entity_id = r.entity_id
+        WHERE	(d.quantity >= bs.quantity_base OR d.quantity * d.price > bs.quantity_quote);
 		
 		out_message := 'Inserted ' || SQL%ROWCOUNT || ' orders';
 		
@@ -316,19 +356,19 @@ IS
 				in_request_id AS request_id,
         		CASE t.is_buyer_maker WHEN 'false' THEN 3 WHEN 'true' THEN 4 END AS side_id,
 				t.trade_id,
-				(SELECT UTILS_PKG.unix_milliseconds_to_date(t.unix_milliseconds) FROM dual) AS created,
+				(SELECT UTILS_PKG.unix_milliseconds_to_date(t.timestamp) FROM dual) AS created,
 				t.price,
 				t.quantity
 		FROM	JSON_TABLE(
 					in_json,
 					'$[*]'
 					COLUMNS (
-						rn 					FOR ORDINALITY,
-						trade_id			varchar2(15)	PATH '$.a',
-						price				number			PATH '$.p',
-						quantity			number			PATH '$.q',
-						unix_milliseconds	number			PATH '$.T',
-						is_buyer_maker		varchar2(5)		PATH '$.m'
+						rn 				FOR ORDINALITY,
+						trade_id		varchar2(15)	PATH '$.a',
+						price			number			PATH '$.p',
+						quantity		number			PATH '$.q',
+						timestamp		number			PATH '$.T',
+						is_buyer_maker	varchar2(5)		PATH '$.m'
 					)
 				) t
 		WHERE	lr_vw_requests.market = 'binance'
@@ -337,19 +377,19 @@ IS
 				in_request_id AS request_id,
         		CASE t.side WHEN 0 THEN 3 WHEN 1 THEN 4 END AS side_id,
 				t.tid AS trade_id,
-				(SELECT UTILS_PKG.unix_seconds_to_date(t.unix_seconds) FROM dual) AS created,
+				(SELECT UTILS_PKG.unix_seconds_to_date(t.timestamp) FROM dual) AS created,
 				t.price,
 				t.quantity
 		FROM	JSON_TABLE(
 					in_json,
 					'$[*]'
 					COLUMNS (
-						rn 				FOR ORDINALITY,
-						tid				varchar2(15)	PATH '$.tid',
-						unix_seconds	number			PATH '$.date',
-						side			number			PATH '$.type',
-						price			number			PATH '$.price',
-						quantity		number			PATH '$.amount'
+						rn 			FOR ORDINALITY,
+						tid			varchar2(15)	PATH '$.tid',
+						timestamp	number			PATH '$.date',
+						side		number			PATH '$.type',
+						price		number			PATH '$.price',
+						quantity	number			PATH '$.amount'
 					)
 				) t
 		WHERE	lr_vw_requests.market = 'bitstamp'
@@ -358,21 +398,42 @@ IS
 				in_request_id AS request_id,
                 CASE WHEN t.quantity >= 0 THEN 3 WHEN t.quantity < 0 THEN 4 END AS side_id,
 				t.trade_id,
-				(SELECT UTILS_PKG.unix_milliseconds_to_date(t.unix_milliseconds) FROM dual) AS created,
+				(SELECT UTILS_PKG.unix_milliseconds_to_date(t.timestamp) FROM dual) AS created,
 				t.price,
 				ABS(t.quantity) AS quantity
 		FROM	JSON_TABLE(
 					in_json,
 					'$[*]'
 					COLUMNS (
-						rn 					FOR ORDINALITY,
-						trade_id			varchar2(15)	PATH '$[0]',
-						unix_milliseconds	number			PATH '$[1]',
-						price				number			PATH '$[3]',
-						quantity			number			PATH '$[2]'
+						rn 			FOR ORDINALITY,
+						trade_id	varchar2(15)	PATH '$[0]',
+						timestamp	number			PATH '$[1]',
+						price		number			PATH '$[3]',
+						quantity	number			PATH '$[2]'
 					)
 				) t
-		WHERE	lr_vw_requests.market = 'bitfinex';                    
+		WHERE	lr_vw_requests.market = 'bitfinex'
+			UNION ALL
+		SELECT	in_batch_id AS batch_id,
+				in_request_id AS request_id,
+                CASE t.side WHEN 'buy' THEN 3 WHEN 'sell' THEN 4 END AS side_id,
+				t.trade_id,
+				to_date(REPLACE(t.timestamp, 'T', ' '), 'YYYY-MM-DD HH24:MI:SS') AS created,
+				t.price,
+				ABS(t.quantity) AS quantity
+		FROM	JSON_TABLE(
+					in_json,
+					'$[*]'
+					COLUMNS (
+						rn 			FOR ORDINALITY,
+						trade_id	varchar2(15)	PATH '$.id',
+						timestamp	varchar2(20)	PATH '$.timestamp',
+						price		number			PATH '$.price',
+						quantity	number			PATH '$.quantity',
+						side		varchar2(4)		PATH '$.side'
+					)
+				) t
+		WHERE	lr_vw_requests.market = 'hitbtc';                    
 
 		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
 
@@ -417,6 +478,7 @@ IS
 			created,
 			price,
 			quantity,
+			cnt,
 			aggregate
 		)
 		SELECT	SQN_trades.NEXTVAL AS id,
@@ -427,10 +489,14 @@ IS
 				d.created,
 				d.price,
 				d.quantity,
+				1 AS cnt,
 				NULL
 		FROM	trades_gtt d	INNER JOIN requests r
 								ON	r.id = d.request_id
-        WHERE	d.quantity >= r.min_quantity
+								INNER JOIN big_sets bs
+								ON	bs.symbol_id = r.symbol_id
+								AND	bs.entity_id = r.entity_id
+        WHERE	(d.quantity >= bs.quantity_base OR d.quantity * d.price > bs.quantity_quote)
         AND		d.batch_id = lr_batches.id
 		AND		d.created BETWEEN lr_batches.ds AND lr_batches.df;
 
@@ -445,6 +511,7 @@ IS
 			created,
 			price,
 			quantity,
+			cnt,
 			aggregate
 		)
 		SELECT	SQN_trades.NEXTVAL AS id,
@@ -455,6 +522,7 @@ IS
 				d.created,
 				d.price,
 				d.quantity,
+				d.cnt,
 				d.aggregate
 		FROM	(
 					SELECT	d.batch_id,
@@ -464,7 +532,8 @@ IS
 							NULL AS created,
 							NULL AS price,
 							SUM(d.quantity) AS quantity,
-							'SUM.QUANTITY.ALL' AS aggregate
+							COUNT(1) AS cnt,
+							'ALL.QUANTITY.SUM' AS aggregate
 					FROM	trades_gtt d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
@@ -479,7 +548,8 @@ IS
 							NULL AS created,
 							MIN(d.price) AS price,
 							NULL AS quantity,
-							'MIN.PRICE.ALL' AS aggregate
+							NULL AS cnt,
+							'ALL.PRICE.MIN' AS aggregate
 					FROM	trades_gtt d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
@@ -494,7 +564,8 @@ IS
 							NULL AS created,
 							MAX(d.price) AS price,
 							NULL AS quantity,
-							'MAX.PRICE.ALL' AS aggregate
+							NULL AS cnt,
+							'ALL.PRICE.MAX' AS aggregate
 					FROM	trades_gtt d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
@@ -509,7 +580,8 @@ IS
 							NULL AS created,
 							MIN(d.price) KEEP (DENSE_RANK FIRST ORDER BY d.created) AS price,
 							NULL AS quantity,
-							'FIRST.PRICE.ALL' AS aggregate
+							NULL AS cnt,
+							'ALL.PRICE.FIRST' AS aggregate
 					FROM	trades_gtt d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
@@ -524,7 +596,8 @@ IS
 							NULL AS created,
 							MAX(d.price) KEEP (DENSE_RANK LAST ORDER BY d.created) AS price,
 							NULL AS quantity,
-							'LAST.PRICE.ALL' AS aggregate
+							NULL AS cnt,
+							'ALL.PRICE.LAST' AS aggregate
 					FROM	trades_gtt d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.created BETWEEN lr_batches.ds AND lr_batches.df
@@ -539,7 +612,8 @@ IS
 							NULL AS created,
 							NULL AS price,
 							SUM(d.quantity) AS quantity,
-							'SUM.QUANTITY.BIG' AS aggregate
+							COUNT(1) AS cnt,
+							'BIG.QUANTITY.SUM' AS aggregate
 					FROM	trades d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.aggregate IS NULL
@@ -554,7 +628,8 @@ IS
 							NULL AS created,
 							MIN(d.price) AS price,
 							NULL AS quantity,
-							'MIN.PRICE.BIG' AS aggregate
+							NULL AS cnt,
+							'BIG.PRICE.MIN' AS aggregate
 					FROM	trades d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.aggregate IS NULL
@@ -569,7 +644,8 @@ IS
 							NULL AS created,
 							MAX(d.price) AS price,
 							NULL AS quantity,
-							'MAX.PRICE.BIG' AS aggregate
+							NULL AS cnt,
+							'BIG.PRICE.MAX' AS aggregate
 					FROM	trades d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.aggregate IS NULL
@@ -584,7 +660,8 @@ IS
 							NULL AS created,
 							MIN(d.price) KEEP (DENSE_RANK FIRST ORDER BY d.created) AS price,
 							NULL AS quantity,
-							'FIRST.PRICE.BIG' AS aggregate
+							NULL AS cnt,
+							'BIG.PRICE.FIRST' AS aggregate
 					FROM	trades d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.aggregate IS NULL
@@ -599,7 +676,8 @@ IS
 							NULL AS created,
 							MAX(d.price) KEEP (DENSE_RANK LAST ORDER BY d.created) AS price,
 							NULL AS quantity,
-							'LAST.PRICE.BIG' AS aggregate
+							NULL AS cnt,
+							'BIG.PRICE.LAST' AS aggregate
 					FROM	trades d
 					WHERE	d.batch_id = lr_batches.id
 					AND		d.aggregate IS NULL

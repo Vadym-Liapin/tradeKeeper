@@ -7,6 +7,5 @@ SELECT	id,
 		symbol_id,
 		endpoint,
 		params,
-		active,
-		min_quantity
+		active
 FROM	&&SCHEMA.t_requests;

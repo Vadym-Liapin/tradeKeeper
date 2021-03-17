@@ -47,7 +47,9 @@ def createBatch(connection):
 					'df_unix_s': 		row[2], 
 					'ds_unix_ms': 		row[3], 
 					'df_unix_ms': 		row[4], 
-					'ds_unix_ms_p10s': 	row[5]
+					'ds_unix_ms_p10s': 	row[5],
+					'ds_ISO8601':		row[6],
+					'df_ISO8601':		row[7]
 				}
 				
 	return result
@@ -73,7 +75,8 @@ def getActiveEndpoints(connection, batch):
 				'%df_unix_s%': 			str(batch.get('df_unix_s')),
 				'%ds_unix_ms%': 		str(batch.get('ds_unix_ms')),
 				'%df_unix_ms%': 		str(batch.get('df_unix_ms')),
-				'%ds_unix_ms_p10s%': 	str(batch.get('ds_unix_ms_p10s'))
+				'%ds_unix_ms_p10s%': 	str(batch.get('ds_unix_ms_p10s')),
+				'%ds_ISO8601%':			str(batch.get('ds_ISO8601'))
 			}
 			
 	result = []

@@ -1,12 +1,14 @@
 CREATE TABLE &&SCHEMA.t_batches (
     id			number,
-	created		date	CONSTRAINT t_batches_created_nn		NOT NULL,
-	ds			date	CONSTRAINT t_batches_ds_nn			NOT NULL,
-	df			date	CONSTRAINT t_batches_df_nn			NOT NULL,
-	ds_unix_s	number	CONSTRAINT t_batches_ds_unix_s_nn	NOT NULL,
-	df_unix_s	number	CONSTRAINT t_batches_df_unix_s_nn	NOT NULL,
-	ds_unix_ms	number	CONSTRAINT t_batches_ds_unix_ms_nn	NOT NULL,
-	df_unix_ms	number	CONSTRAINT t_batches_df_unix_ms_nn	NOT NULL,
+	created		date			CONSTRAINT t_batches_created_nn		NOT NULL,
+	ds			date			CONSTRAINT t_batches_ds_nn			NOT NULL,
+	df			date			CONSTRAINT t_batches_df_nn			NOT NULL,
+	ds_unix_s	number			CONSTRAINT t_batches_ds_unix_s_nn	NOT NULL,
+	df_unix_s	number			CONSTRAINT t_batches_df_unix_s_nn	NOT NULL,
+	ds_unix_ms	number			CONSTRAINT t_batches_ds_unix_ms_nn	NOT NULL,
+	df_unix_ms	number			CONSTRAINT t_batches_df_unix_ms_nn	NOT NULL,
+	ds_ISO8601	varchar2(20)	CONSTRAINT t_batches_ds_ISO8601_nn	NOT NULL,
+	df_ISO8601	varchar2(20)	CONSTRAINT t_batches_df_ISO8601_nn	NOT NULL,
     CONSTRAINT t_batches_pk		PRIMARY KEY (id),
 	CONSTRAINT t_batches_uniq	UNIQUE (created)
 )
@@ -26,5 +28,7 @@ COMMENT ON COLUMN &&SCHEMA.t_batches.ds_unix_s	IS 'Period Start Date (in Unix Se
 COMMENT ON COLUMN &&SCHEMA.t_batches.df_unix_s	IS 'Period End Date (in Unix Seconds)';
 COMMENT ON COLUMN &&SCHEMA.t_batches.ds_unix_ms	IS 'Period Start Date (in Unix Milliseconds)';
 COMMENT ON COLUMN &&SCHEMA.t_batches.df_unix_ms	IS 'Period End Date (in Unix Milliseconds)';
+COMMENT ON COLUMN &&SCHEMA.t_batches.ds_ISO8601	IS 'Period Start Date (in ISO 8601 format)';
+COMMENT ON COLUMN &&SCHEMA.t_batches.df_ISO8601	IS 'Period End Date (in ISO 8601 format)';
 
 
