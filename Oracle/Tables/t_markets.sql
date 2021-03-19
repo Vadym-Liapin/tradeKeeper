@@ -15,7 +15,8 @@ INSERT INTO &&SCHEMA.t_markets (id, code)
 SELECT	1 AS id,	'binance' 	AS code	FROM dual	UNION ALL
 SELECT	2 AS id,	'bitstamp' 	AS code	FROM dual	UNION ALL
 SELECT	3 AS id,	'bitfinex' 	AS code	FROM dual	UNION ALL
-SELECT	4 AS id,	'hitbtc' 	AS code	FROM dual
+SELECT	4 AS id,	'hitbtc' 	AS code	FROM dual	UNION ALL
+SELECT	5 AS id,	'kraken' 	AS code	FROM dual
 ;
 
 COMMIT;

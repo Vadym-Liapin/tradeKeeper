@@ -76,7 +76,8 @@ def getActiveEndpoints(connection, batch):
 				'%ds_unix_ms%': 		str(batch.get('ds_unix_ms')),
 				'%df_unix_ms%': 		str(batch.get('df_unix_ms')),
 				'%ds_unix_ms_p10s%': 	str(batch.get('ds_unix_ms_p10s')),
-				'%ds_ISO8601%':			str(batch.get('ds_ISO8601'))
+				'%ds_ISO8601%':			str(batch.get('ds_ISO8601')),
+				'%df_ISO8601%':			str(batch.get('df_ISO8601'))
 			}
 			
 	result = []
@@ -109,7 +110,7 @@ def insertOrders(connection, batchId, requestId, response):
 	
 	cursor.callproc('MARKETS_PKG.insert_orders', [in_batch_id, in_request_id, in_json, out_code, out_message])
 	cursor.close()
-	
+	debugLogger.info('code=' + str(out_code.getvalue()) + ', message=' + out_message.getvalue())
 	return {'code': int(out_code.getvalue()), 'message': out_message.getvalue()}
 
 def insertTradesGTT(connection, batchId, requestId, response):
@@ -127,7 +128,7 @@ def insertTradesGTT(connection, batchId, requestId, response):
 	
 	cursor.callproc('MARKETS_PKG.insert_trades_gtt', [in_batch_id, in_request_id, in_json, out_code, out_message])
 	cursor.close()
-	
+
 	return {'code': int(out_code.getvalue()), 'message': out_message.getvalue()}
 
 def insertTrades(connection, batchId):
@@ -153,6 +154,7 @@ if __name__ == '__main__':
 	batch = createBatch(connection)
 	batchId = batch.get('id')
 	batchDfUnixMs = batch.get('df_unix_ms')
+	batchDfISO8601 = batch.get('df_ISO8601')
 	#debugLogger.info('batch=' + str(batch))
 	
 	activeEndpoints = getActiveEndpoints(connection, batch)
@@ -167,19 +169,15 @@ if __name__ == '__main__':
 		
 		if (entity == "orders"):
 			response = requests.get(request)
+			debugLogger.info(response.text)
 			insertOrders(connection, batchId, requestId, response.text)
 			
-		elif (entity == "trades" and market != "binance"):
-			response = requests.get(request)
-			insertTradesGTT(connection, batchId, requestId, response.text)
-
 		elif (entity == "trades" and market == "binance"):
 			if requestParentId is None:
 				response = requests.get(request)
 				responseJSON = response.json()
 				fromId = int(responseJSON[0]['a'])
 				created = int(responseJSON[0]['T'])
-				#debugLogger.info('fromId=' + str(fromId) + ', created=' + str(created))
 			else:
 				for i in range(1000):
 					response = requests.get(request.replace('%fromId%', str(fromId)))
@@ -188,13 +186,42 @@ if __name__ == '__main__':
 					
 					fromIdLast = int(responseJSON[-1]['a'])
 					createdLast = int(responseJSON[-1]['T'])
-					#debugLogger.info('i=' + str(i) + ', fromId=' + str(fromIdLast) + ', created=' + str(createdLast) + ', batchDfUnixMs=' + str(batchDfUnixMs))
 					
 					if fromIdLast > fromId and createdLast < batchDfUnixMs:
 						fromId = fromIdLast
 						i = i + 1
 					else:
 						break
+
+		elif (entity == "trades" and market == "hitbtc"):
+			if requestParentId is None:
+				response = requests.get(request)
+				responseJSON = response.json()
+				insertTradesGTT(connection, batchId, requestId, response.text)
+				
+				offset = 1000
+				createdT = responseJSON[-1]['timestamp']
+				debugLogger.info('createdT=' + str(createdT))
+			else:
+				for i in range(1000):
+					response = requests.get(request.replace('%offset%', str(offset)))
+					responseJSON = response.json()
+					
+					insertTradesGTT(connection, batchId, requestId, response.text)
+					
+					if len(responseJSON) == 1000:
+						createdT = responseJSON[-1]['timestamp']
+						
+						if createdT < batchDfISO8601:
+							offset = offset + 1000
+						else:
+							break
+					else:
+						break
+						
+		elif (entity == "trades"):
+			response = requests.get(request)
+			insertTradesGTT(connection, batchId, requestId, response.text)
 			
 	insertTrades(connection, batchId)
 

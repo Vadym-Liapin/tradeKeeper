@@ -96,7 +96,7 @@ SELECT	6 AS id,
 		1 AS active
 FROM 	dual
 	UNION ALL
--- parent trades binance BTC/USDT
+-- child trades binance BTC/USDT
 SELECT	7 AS id,
 		6 AS parent_id,
 		2 AS entity_id,	
@@ -116,7 +116,40 @@ SELECT	8 AS id,
 		'https://api.hitbtc.com/api/2/public/orderbook/btcusd'	AS endpoint, 
 		'?limit=0' AS params,
 		1 AS active
-FROM 	dual	
+FROM 	dual
+	UNION ALL
+-- trades hitbtc BTC/USD
+SELECT	9 AS id,
+		NULL AS parent_id,
+		2 AS entity_id,	
+		4 AS market_id,	
+		2 AS symbol_id,	
+		'https://api.hitbtc.com/api/2/public/trades/BTCUSD' AS endpoint,
+		'?sort=ASC&' || 'limit=1000&' || 'from=%ds_ISO8601%&' || 'till=%df_ISO8601%' AS params,
+		1 AS active
+FROM 	dual
+	UNION ALL
+-- child trades binance BTC/USD
+SELECT	10 AS id,
+		9 AS parent_id,
+		2 AS entity_id,	
+		4 AS market_id,	
+		2 AS symbol_id,	
+		'https://api.hitbtc.com/api/2/public/trades/BTCUSD' AS endpoint,
+		'?sort=ASC&' || 'limit=1000&' || 'from=%ds_ISO8601%&' || 'till=%df_ISO8601%&' || 'offset=%offset%' AS params,
+		1 AS active
+FROM 	dual
+	UNION ALL
+-- orders kraken BTC/USD
+SELECT	11 AS id,
+		NULL AS parent_id,
+		1 AS entity_id,	
+		5 AS market_id,	
+		2 AS symbol_id,	
+		'https://api.kraken.com/0/public/Depth'	AS endpoint, 
+		'?pair=BTCUSD&' || 'count=1000' AS params,
+		1 AS active
+FROM 	dual
 ;
 
 COMMIT;

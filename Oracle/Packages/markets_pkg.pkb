@@ -87,12 +87,15 @@ IS
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
-			out_message	:= ERRORS_PKG.log_error(in_params => 'out_code=' || out_code || ', out_message=' || out_message);
+			out_code 	:= 	CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('out_code', out_code) || 
+								ERRORS_PKG.add_varchar2('out_message', out_message)
+							);
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => NULL);
+            out_message	:= ERRORS_PKG.log_error(NULL);
 	END get_active_endpoints;
 
 	PROCEDURE create_batch (
@@ -151,14 +154,17 @@ IS
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
-			out_message	:= ERRORS_PKG.log_error(in_params => 'out_code=' || out_code || ', out_message=' || out_message);
+			out_code 	:= 	CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('out_code', out_code) || 
+								ERRORS_PKG.add_varchar2('out_message', out_message)
+							);
 			
 			ROLLBACK;
 		WHEN OTHERS
 		THEN
 			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => NULL);
+            out_message	:= ERRORS_PKG.log_error(NULL);
 
 			ROLLBACK;
 	END create_batch;
@@ -265,7 +271,6 @@ IS
 											)
 										) t
 								WHERE	lr_vw_requests.market = 'bitfinex'
-
 									UNION ALL
 								SELECT	1 AS side_id,
 										t.price,
@@ -296,6 +301,36 @@ IS
 											)
 										) t
 								WHERE	lr_vw_requests.market = 'hitbtc'
+									UNION ALL
+								SELECT	1 AS side_id,
+										t.price,
+										t.quantity,
+										SUM(t.quantity) OVER (ORDER BY t.rn ASC) AS quantity_CUM
+								FROM	JSON_TABLE(
+											in_json,
+											'$.result.*.bids[*]'
+											COLUMNS (
+												rn 			FOR ORDINALITY,
+												price		number	PATH '$[0]',
+												quantity	number	PATH '$[1]'
+											)
+										) t
+								WHERE	lr_vw_requests.market = 'kraken'
+									UNION ALL
+								SELECT	2 AS side_id,
+										t.price,
+										t.quantity,
+										SUM(t.quantity) OVER (ORDER BY t.rn ASC) AS quantity_CUM
+								FROM	JSON_TABLE(
+											in_json,
+											'$.result.*.asks[*]'
+											COLUMNS (
+												rn 			FOR ORDINALITY,
+												price		number	PATH '$[0]',
+												quantity	number	PATH '$[1]'
+											)
+										) t
+								WHERE	lr_vw_requests.market = 'kraken'
 							) d
 				) d	INNER JOIN requests r
         			ON	r.id = in_request_id
@@ -310,14 +345,23 @@ IS
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
-			out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', in_request_id=' || in_request_id || ', out_code=' || out_code || ', out_message=' || out_message);
+			out_code 	:= 	CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('in_batch_id', in_batch_id) || 
+								ERRORS_PKG.add_number('in_request_id', in_request_id) || 
+								ERRORS_PKG.add_number('out_code', out_code) || 
+								ERRORS_PKG.add_varchar2('out_message', out_message)
+							);
+
 			
 			ROLLBACK;
 		WHEN OTHERS
 		THEN
-			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => 'in_batch_id=' || in_batch_id || ', in_request_id=' || in_request_id);
+			out_code	:= 	-1;
+            out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('in_batch_id', in_batch_id) || 
+								ERRORS_PKG.add_number('in_request_id', in_request_id)
+							);
 
 			ROLLBACK;
 	END insert_orders;
@@ -418,7 +462,7 @@ IS
 				in_request_id AS request_id,
                 CASE t.side WHEN 'buy' THEN 3 WHEN 'sell' THEN 4 END AS side_id,
 				t.trade_id,
-				to_date(REPLACE(t.timestamp, 'T', ' '), 'YYYY-MM-DD HH24:MI:SS') AS created,
+				to_date(REPLACE(SUBSTR(t.timestamp, 1, 19), 'T', ' '), 'YYYY-MM-DD HH24:MI:SS') AS created,
 				t.price,
 				ABS(t.quantity) AS quantity
 		FROM	JSON_TABLE(
@@ -427,13 +471,13 @@ IS
 					COLUMNS (
 						rn 			FOR ORDINALITY,
 						trade_id	varchar2(15)	PATH '$.id',
-						timestamp	varchar2(20)	PATH '$.timestamp',
+						timestamp	varchar2(30)	PATH '$.timestamp',
 						price		number			PATH '$.price',
 						quantity	number			PATH '$.quantity',
 						side		varchar2(4)		PATH '$.side'
 					)
 				) t
-		WHERE	lr_vw_requests.market = 'hitbtc';                    
+		WHERE	lr_vw_requests.market = 'hitbtc';
 
 		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
 
@@ -441,14 +485,22 @@ IS
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
-			out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', in_request_id=' || in_request_id || ', out_code=' || out_code || ', out_message=' || out_message);
+			out_code 	:= 	CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('in_batch_id', in_batch_id) || 
+								ERRORS_PKG.add_number('in_request_id', in_request_id) || 
+								ERRORS_PKG.add_number('out_code', out_code) || 
+								ERRORS_PKG.add_varchar2('out_message', out_message)
+							);
 			
 			ROLLBACK;
 		WHEN OTHERS
 		THEN
-			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', in_request_id=' || in_request_id);
+			out_code	:= 	-1;
+            out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('in_batch_id', in_batch_id) || 
+								ERRORS_PKG.add_number('in_request_id', in_request_id)
+							);
 
 			ROLLBACK;
 	END insert_trades_gtt;
@@ -692,14 +744,20 @@ IS
 	EXCEPTION
 		WHEN eMyError
 		THEN
-			out_code 	:= CASE out_code WHEN 0 THEN -1 ELSE out_code END;
-			out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id || ', out_code=' || out_code || ', out_message=' || out_message);
+			out_code 	:= 	CASE out_code WHEN 0 THEN -1 ELSE out_code END;
+			out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('in_batch_id', in_batch_id) || 
+								ERRORS_PKG.add_number('out_code', out_code) || 
+								ERRORS_PKG.add_varchar2('out_message', out_message)
+							);
 			
 			ROLLBACK;
 		WHEN OTHERS
 		THEN
-			out_code	:= -1;
-            out_message	:= ERRORS_PKG.log_error(in_params => 'batch_id=' || in_batch_id);
+			out_code	:= 	-1;
+            out_message	:= 	ERRORS_PKG.log_error(
+								ERRORS_PKG.add_number('in_batch_id', in_batch_id)
+							);
 
 			ROLLBACK;
 	END insert_trades;	
