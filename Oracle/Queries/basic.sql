@@ -108,4 +108,5 @@ GROUP BY	d.batch,
             d.BIG_quantity
 ORDER BY	d.market,
 			d.symbol,
+            d.batch_id,
             d.side;

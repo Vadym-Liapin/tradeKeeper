@@ -153,6 +153,8 @@ if __name__ == '__main__':
 	
 	batch = createBatch(connection)
 	batchId = batch.get('id')
+	batchDsUnixS = batch.get('ds_unix_s')
+	batchDfUnixS = batch.get('df_unix_s')
 	batchDfUnixMs = batch.get('df_unix_ms')
 	batchDfISO8601 = batch.get('df_ISO8601')
 	#debugLogger.info('batch=' + str(batch))
@@ -218,7 +220,22 @@ if __name__ == '__main__':
 							break
 					else:
 						break
-						
+
+		elif (entity == "trades" and market == "kraken"):
+			fromId = str(batchDsUnixS) + '000000000'
+			for i in range(100):
+				response = requests.get(request.replace('%fromId%', fromId))
+				responseJSON = response.json()
+				insertTradesGTT(connection, batchId, requestId, response.text)
+				
+				fromIdLast = responseJSON['result']['last']
+				
+				if fromIdLast > fromId and int(fromId[:10]) < batchDfUnixS:
+					fromId = fromIdLast
+					i = i + 1
+				else:
+					break
+					
 		elif (entity == "trades"):
 			response = requests.get(request)
 			insertTradesGTT(connection, batchId, requestId, response.text)

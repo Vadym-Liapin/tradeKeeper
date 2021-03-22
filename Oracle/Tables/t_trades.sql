@@ -3,7 +3,7 @@ CREATE TABLE &&SCHEMA.t_trades (
 	batch_id		number 			CONSTRAINT t_trades_batch_id_nn		NOT NULL,
 	request_id		number			CONSTRAINT t_trades_request_id_nn	NOT NULL,
 	side_id			number			CONSTRAINT t_trades_side_id_nn		NOT NULL,
-	trade_id		varchar2(15),	
+	trade_id		varchar2(20),	
 	created			date,
 	price			number,
 	quantity		number,

@@ -12,7 +12,7 @@ CREATE TABLE &&SCHEMA.t_errors (
 	CONSTRAINT t_ext_details_chk	CHECK (ext_details IS JSON),
 	CONSTRAINT t_ora_details_chk	CHECK (ora_details IS JSON),
 	CONSTRAINT t_who_called_me_chk	CHECK (who_called_me IS JSON),
-	CONSTRAINT t_userenv_chk		CHECK (userenv IS JSON)
+	CONSTRAINT t_userenv_chk		CHECK (userenv IS JSON)	
 );
 
 COMMENT ON TABLE &&SCHEMA.t_errors IS 'Error Details';

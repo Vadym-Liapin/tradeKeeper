@@ -7,7 +7,8 @@ IS
 	) RETURN varchar2
 	IS
 	BEGIN
-		RETURN '"' || in_key || '":"' || NVL(in_value, 'null') || '",';
+		RETURN 	'"' || in_key || '":"' || 
+				NVL(REGEXP_REPLACE(in_value, '("|\\)', '\\\1', 1, 0, 'i'), 'null') || '",';
 	END add_varchar2;
 	
 	FUNCTION add_number (
@@ -16,7 +17,8 @@ IS
 	) RETURN varchar2
 	IS
 	BEGIN
-		RETURN '"' || in_key || '":"' || NVL(to_char(in_value), 'null') || '",';
+		RETURN 	'"' || in_key || '":"' || 
+				NVL(to_char(in_value), 'null') || '",';
 	END add_number;
 
     FUNCTION log_error (
@@ -104,7 +106,7 @@ IS
 
             COMMIT;
             
-            RETURN 'Sorry, technical error occurred. Please contact us providing the following error ID: ' || lr_errors.id;
+            RETURN 'Sorry, technical error occurred. Error ID: ' || lr_errors.id;
 	END log_error;
 
 END;

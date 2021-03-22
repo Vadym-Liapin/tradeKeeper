@@ -2,7 +2,7 @@ CREATE GLOBAL TEMPORARY TABLE &&SCHEMA.t_trades_gtt (
 	batch_id	number,
     request_id	number,
     side_id		number,
-	trade_id	varchar2(15),	
+	trade_id	varchar2(20),	
 	created		date,
 	price		number,
 	quantity	number

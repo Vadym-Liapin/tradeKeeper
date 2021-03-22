@@ -150,6 +150,17 @@ SELECT	11 AS id,
 		'?pair=BTCUSD&' || 'count=1000' AS params,
 		1 AS active
 FROM 	dual
+	UNION ALL
+-- trades kraken BTC/USD
+SELECT	12 AS id,
+		NULL AS parent_id,
+		2 AS entity_id,	
+		5 AS market_id,	
+		2 AS symbol_id,	
+		'https://api.kraken.com/0/public/Trades' AS endpoint, 
+		'?pair=BTCUSD&' || 'since=%fromId%' AS params,
+		1 AS active
+FROM 	dual
 ;
 
 COMMIT;

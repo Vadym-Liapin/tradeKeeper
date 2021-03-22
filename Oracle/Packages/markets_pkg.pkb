@@ -408,7 +408,7 @@ IS
 					'$[*]'
 					COLUMNS (
 						rn 				FOR ORDINALITY,
-						trade_id		varchar2(15)	PATH '$.a',
+						trade_id		varchar2(20)	PATH '$.a',
 						price			number			PATH '$.p',
 						quantity		number			PATH '$.q',
 						timestamp		number			PATH '$.T',
@@ -450,7 +450,7 @@ IS
 					'$[*]'
 					COLUMNS (
 						rn 			FOR ORDINALITY,
-						trade_id	varchar2(15)	PATH '$[0]',
+						trade_id	varchar2(20)	PATH '$[0]',
 						timestamp	number			PATH '$[1]',
 						price		number			PATH '$[3]',
 						quantity	number			PATH '$[2]'
@@ -470,15 +470,45 @@ IS
 					'$[*]'
 					COLUMNS (
 						rn 			FOR ORDINALITY,
-						trade_id	varchar2(15)	PATH '$.id',
+						trade_id	varchar2(20)	PATH '$.id',
 						timestamp	varchar2(30)	PATH '$.timestamp',
 						price		number			PATH '$.price',
 						quantity	number			PATH '$.quantity',
 						side		varchar2(4)		PATH '$.side'
 					)
 				) t
-		WHERE	lr_vw_requests.market = 'hitbtc';
-
+		WHERE	lr_vw_requests.market = 'hitbtc'
+			UNION ALL
+		SELECT	in_batch_id AS batch_id,
+				in_request_id AS request_id,
+				d.side_id,
+				d.trade_id,
+				d.created,
+				d.price,
+				d.quantity
+		FROM	(
+					SELECT	CASE t.side WHEN 'b' THEN 3 WHEN 's' THEN 4 END AS side_id,
+							RPAD(REPLACE(t.trade_id, '.', ''), 19, '0') AS trade_id,
+							(SELECT UTILS_PKG.unix_seconds_to_date(to_number(REGEXP_SUBSTR(t.timestamp, '^.+\.', 1, 1, 'i'))) FROM dual) AS created,
+							t.price,
+							ABS(t.quantity) AS quantity,
+							MAX(CASE WHEN t.trade_id IS NULL THEN t.price END) OVER() AS last
+					FROM	JSON_TABLE(
+								in_json,
+								'$.result.*[*]'
+								COLUMNS (
+									rn 			FOR ORDINALITY,
+									trade_id	varchar2(20)	PATH '$[2]',
+									timestamp	varchar2(30)	PATH '$[2]',
+									price		number			PATH '$[0]',
+									quantity	number			PATH '$[1]',
+									side		varchar2(4)		PATH '$[3]'
+								)
+							) t
+				) d
+		WHERE	d.trade_id IS NOT NULL
+		AND		lr_vw_requests.market = 'kraken';
+			
 		out_message := 'Inserted ' || SQL%ROWCOUNT || ' trades';
 
 		COMMIT;
