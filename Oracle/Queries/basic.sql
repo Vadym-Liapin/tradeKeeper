@@ -47,7 +47,7 @@ FROM	(
                         AND		o.quantity >= 50
                     ) d
       	) d
-WHERE	d.prc <= 12              
+WHERE	d.prc <= 8
 ORDER BY	CASE d.side WHEN 'ASK' THEN 1 WHEN 'BID' THEN 2 END,
     		- d.price;
 
@@ -108,5 +108,5 @@ GROUP BY	d.batch,
             d.BIG_quantity
 ORDER BY	d.market,
 			d.symbol,
-            d.batch_id,
+            d.batch,
             d.side;
