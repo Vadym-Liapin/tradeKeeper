@@ -10,10 +10,11 @@ def initLogger(type, file):
 	
 	if type == 'error':
 		logger.setLevel(logging.ERROR)
+		handler = logging.FileHandler(file, mode='a')
 	elif type == 'debug':
 		logger.setLevel(logging.DEBUG)
+		handler = logging.FileHandler(file, mode='w')
 	
-	handler = logging.FileHandler(file)
 	formatter = logging.Formatter('%(asctime)s %(filename)s: %(message)s', '%d.%m.%Y %H:%M:%S')
 	handler.setFormatter(formatter)
 	logger.addHandler(handler)
@@ -157,10 +158,8 @@ if __name__ == '__main__':
 	batchDfUnixS = batch.get('df_unix_s')
 	batchDfUnixMs = batch.get('df_unix_ms')
 	batchDfISO8601 = batch.get('df_ISO8601')
-	#debugLogger.info('batch=' + str(batch))
 	
 	activeEndpoints = getActiveEndpoints(connection, batch)
-	#debugLogger.info('activeEndpoints=' + str(activeEndpoints))
 	
 	for row in activeEndpoints:
 		requestId = row.get('request_id')

@@ -21,6 +21,10 @@ IS
         out_code	OUT	number,
 		out_message	OUT	varchar2
     );
-	
+
+	FUNCTION string_to_table (
+		in_string		IN	varchar2,
+		in_separator	IN	varchar2 DEFAULT ','
+	) RETURN tt_values;
 END;
 /

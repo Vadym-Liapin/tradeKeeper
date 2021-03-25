@@ -1,0 +1,1 @@
+CREATE OR REPLACE CONTEXT ctx_reports USING &&SCHEMA.reports_pkg;

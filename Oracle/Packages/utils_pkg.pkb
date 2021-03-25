@@ -63,5 +63,24 @@ IS
 		out_message	:= 'OK';
 	END init_out_params;
 	
+	FUNCTION string_to_table (
+		in_string		IN	varchar2,
+		in_separator	IN	varchar2 DEFAULT ','
+	) RETURN tt_values
+	IS
+		ltt_values	tt_values := tt_values();
+	BEGIN
+		SELECT	d.value
+		BULK COLLECT INTO ltt_values
+		FROM	(
+					SELECT	REGEXP_SUBSTR(in_string, '[^' || in_separator || ']+', 1, LEVEL, 'i') AS value
+					FROM	dual
+					CONNECT BY	LEVEL <= REGEXP_COUNT(in_string, in_separator, 1, 'i') + 1
+				) d
+		WHERE	d.value IS NOT NULL;
+		
+		RETURN ltt_values;
+	END string_to_table;
+	
 END;
 /

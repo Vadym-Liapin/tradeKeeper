@@ -1,0 +1,1 @@
+CREATE OR REPLACE TYPE &&SCHEMA.tt_values AS TABLE OF varchar2(4000);
