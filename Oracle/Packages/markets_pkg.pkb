@@ -138,6 +138,8 @@ IS
 		RETURNING 	id
 		INTO		l_id;
 		
+		COMMIT;
+		
 		OPEN out_cursor
 		FOR
 			SELECT	b.id,
